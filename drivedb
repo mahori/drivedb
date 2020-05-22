@@ -25,6 +25,35 @@ sub list {
   $sth->finish;
 }
 
+sub search {
+  my ( $dbh, $query, $field ) = @_;
+
+  if ( not defined $query ) {
+    say STDERR 'query must be specified';
+    return;
+  }
+
+  unless ( defined $field ) {
+    $field = ( $query =~ m/\A\d+\Z/ ) ? 'ID' : 'SERIAL_NUMBER';
+  }
+
+  my $sql = sprintf 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES WHERE %s = %s ORDER BY ID', $field, $dbh->quote( $query );
+  my $sth = $dbh->prepare( $sql );
+  $sth->execute;
+
+  while ( my $hashref = $sth->fetchrow_hashref ) {
+    my $id               = $hashref->{ID};
+    my $vendor           = $hashref->{VENDOR};
+    my $model_number     = $hashref->{MODEL_NUMBER};
+    my $serial_number    = $hashref->{SERIAL_NUMBER};
+    my $warranty_expires = $hashref->{WE} // '';
+
+    say "$id\t$vendor\t$model_number\t$serial_number\t$warranty_expires";
+  }
+
+  $sth->finish;
+}
+
 sub add {
   my ( $dbh, $vendor, $model_number, $serial_number, $warranty_expires ) = @_;
 
@@ -53,6 +82,8 @@ sub delete {
 
 my %dispatch_table = ( list   => \&list,
                        l      => \&list,
+                       search => \&search,
+                       s      => \&search,
                        add    => \&add,
                        a      => \&add,
                        delete => \&delete,
