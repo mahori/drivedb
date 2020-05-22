@@ -1,0 +1,51 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use feature qw( say );
+use DBI;
+use Getopt::Std qw( getopts );
+
+sub list {
+  my $dbh = shift;
+
+  my $sth = $dbh->prepare( 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES ORDER BY ID' );
+  $sth->execute;
+
+  while ( my $hashref = $sth->fetchrow_hashref ) {
+    my $id               = $hashref->{ID};
+    my $vendor           = $hashref->{VENDOR};
+    my $model_number     = $hashref->{MODEL_NUMBER};
+    my $serial_number    = $hashref->{SERIAL_NUMBER};
+    my $warranty_expires = $hashref->{WE} // '';
+
+    say "$id\t$vendor\t$model_number\t$serial_number\t$warranty_expires";
+  }
+
+  $sth->finish;
+}
+
+my %dispatch_table = ( list => \&list,
+                       l    => \&list );
+
+my %opts;
+getopts( 'd:u:p:', \%opts );
+my $db       = $opts{d};
+my $user     = $opts{u};
+my $password = $opts{p};
+
+if ( not defined $db or not defined $user or not defined $password ) {
+  say STDERR 'db(-d), user(-u) and password(-p) must be specified';
+  exit -1;
+}
+
+my $dbh = DBI->connect( "dbi:Oracle:$db", $user, $password ) or die $!;
+
+my $command = ( @ARGV < 1 ) ? 'list' : shift;
+if ( exists $dispatch_table{$command} ) {
+  $dispatch_table{$command}->( $dbh, @ARGV );
+}
+
+$dbh->disconnect;
+
+exit 0;
