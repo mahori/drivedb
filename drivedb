@@ -38,10 +38,25 @@ sub add {
   $sth->finish;
 }
 
-my %dispatch_table = ( list => \&list,
-                       l    => \&list,
-                       add  => \&add,
-                       a    => \&add );
+sub delete {
+  my ( $dbh, $id ) = @_;
+
+  if ( not defined $id ) {
+    say STDERR 'id must be specified';
+    return;
+  }
+
+  my $sth = $dbh->prepare( 'DELETE FROM DRIVES WHERE ID = ?' );
+  $sth->execute( $id );
+  $sth->finish;
+}
+
+my %dispatch_table = ( list   => \&list,
+                       l      => \&list,
+                       add    => \&add,
+                       a      => \&add,
+                       delete => \&delete,
+                       d      => \&delete );
 
 my %opts;
 getopts( 'd:u:p:', \%opts );
