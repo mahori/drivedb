@@ -25,8 +25,23 @@ sub list {
   $sth->finish;
 }
 
+sub add {
+  my ( $dbh, $vendor, $model_number, $serial_number, $warranty_expires ) = @_;
+
+  if ( not defined $vendor or not defined $model_number or not defined $serial_number ) {
+    say STDERR 'vendor, model_number and serial_number must be specified';
+    return;
+  }
+
+  my $sth = $dbh->prepare( 'INSERT INTO DRIVES ( VENDOR, MODEL_NUMBER, SERIAL_NUMBER, WARRANTY_EXPIRES ) VALUES ( ?, ?, ?, TO_DATE( ?, \'YYYY-MM-DD\' ) )' );
+  $sth->execute( $vendor, $model_number, $serial_number, $warranty_expires );
+  $sth->finish;
+}
+
 my %dispatch_table = ( list => \&list,
-                       l    => \&list );
+                       l    => \&list,
+                       add  => \&add,
+                       a    => \&add );
 
 my %opts;
 getopts( 'd:u:p:', \%opts );
