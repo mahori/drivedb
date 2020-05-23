@@ -79,6 +79,19 @@ sub delete {
   $sth->finish;
 }
 
+sub update {
+  my ( $dbh, $old_id, $id, $vendor, $model_number, $serial_number, $warranty_expires ) = @_;
+
+  if ( not defined $old_id or not defined $id or not defined $vendor or not defined $model_number or not defined $serial_number ) {
+    say STDERR 'old_id, id, vendor, model_number and serial_number must be specified';
+    return;
+  }
+
+  my $sth = $dbh->prepare( 'UPDATE DRIVES SET ID = ?, VENDOR = ?, MODEL_NUMBER = ?, SERIAL_NUMBER = ?, WARRANTY_EXPIRES = TO_DATE( ?, \'YYYY-MM-DD\' ) WHERE ID = ?' );
+  $sth->execute( $id, $vendor, $model_number, $serial_number, $warranty_expires, $old_id );
+  $sth->finish;
+}
+
 my %dispatch_table = ( list   => \&list,
                        l      => \&list,
                        search => \&search,
@@ -86,7 +99,9 @@ my %dispatch_table = ( list   => \&list,
                        add    => \&add,
                        a      => \&add,
                        delete => \&delete,
-                       d      => \&delete );
+                       d      => \&delete,
+                       update => \&update,
+                       u      => \&update );
 
 my %opts;
 getopts( 'd:u:p:', \%opts );
