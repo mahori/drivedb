@@ -6,11 +6,8 @@ use feature qw( say );
 use DBI;
 use Getopt::Std qw( getopts );
 
-sub list {
-  my $dbh = shift;
-
-  my $sth = $dbh->prepare( 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES ORDER BY ID' );
-  $sth->execute;
+sub print_rows {
+  my $sth = shift;
 
   while ( my $hashref = $sth->fetchrow_hashref ) {
     my $id               = $hashref->{ID};
@@ -19,8 +16,18 @@ sub list {
     my $serial_number    = $hashref->{SERIAL_NUMBER};
     my $warranty_expires = $hashref->{WE} // '';
 
-    say "$id\t$vendor\t$model_number\t$serial_number\t$warranty_expires";
+    my $message = sprintf '%2d  %-18s  %-23s  %-18s  %s', $id, $vendor, $model_number, $serial_number, $warranty_expires;
+    say $message;
   }
+}
+
+sub list {
+  my $dbh = shift;
+
+  my $sth = $dbh->prepare( 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES ORDER BY ID' );
+  $sth->execute;
+
+  &print_rows( $sth );
 
   $sth->finish;
 }
@@ -41,15 +48,7 @@ sub search {
   my $sth = $dbh->prepare( $sql );
   $sth->execute;
 
-  while ( my $hashref = $sth->fetchrow_hashref ) {
-    my $id               = $hashref->{ID};
-    my $vendor           = $hashref->{VENDOR};
-    my $model_number     = $hashref->{MODEL_NUMBER};
-    my $serial_number    = $hashref->{SERIAL_NUMBER};
-    my $warranty_expires = $hashref->{WE} // '';
-
-    say "$id\t$vendor\t$model_number\t$serial_number\t$warranty_expires";
-  }
+  &print_rows( $sth );
 
   $sth->finish;
 }
