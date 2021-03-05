@@ -10,13 +10,17 @@ sub print_rows {
   my $sth = shift;
 
   while ( my $hashref = $sth->fetchrow_hashref ) {
-    my $id               = $hashref->{ID};
-    my $vendor           = $hashref->{VENDOR};
-    my $model_number     = $hashref->{MODEL_NUMBER};
-    my $serial_number    = $hashref->{SERIAL_NUMBER};
-    my $warranty_expires = $hashref->{WE} // '';
+    my $id       = $hashref->{id};
+    my $vendor   = $hashref->{vendor};
+    my $model    = $hashref->{model};
+    my $serial   = $hashref->{serial};
+    my $warranty = $hashref->{warranty};
 
-    my $message = sprintf '%2d  %-18s  %-23s  %-18s  %s', $id, $vendor, $model_number, $serial_number, $warranty_expires;
+    my $message = sprintf '%2d  %-18s  %-19s  %-18s', $id, $vendor, $model, $serial;
+    if ( defined $warranty ) {
+      $message .= sprintf '  %s', $warranty;
+    }
+
     say $message;
   }
 }
@@ -24,71 +28,75 @@ sub print_rows {
 sub list {
   my $dbh = shift;
 
-  my $sth = $dbh->prepare( 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES ORDER BY ID' );
-  $sth->execute;
+  my $sth = $dbh->prepare( 'SELECT id, vendor, model, serial, warranty FROM drives ORDER BY id' ) or die $dbh->errstr;
+
+  $sth->execute or die $sth->errstr;
 
   &print_rows( $sth );
-
-  $sth->finish;
 }
 
 sub search {
   my ( $dbh, $query, $field ) = @_;
 
-  if ( not defined $query ) {
+  unless ( defined $query ) {
     say STDERR 'query must be specified';
     return;
   }
 
   unless ( defined $field ) {
-    $field = ( $query =~ m/\A\d+\Z/ ) ? 'ID' : 'SERIAL_NUMBER';
+    $field = ( $query =~ m/\A\d+\Z/ ) ? 'id' : 'serial';
   }
 
-  my $sql = sprintf 'SELECT ID, VENDOR, MODEL_NUMBER, SERIAL_NUMBER, TO_CHAR( WARRANTY_EXPIRES, \'YYYY-MM-DD\' ) WE FROM DRIVES WHERE %s = %s ORDER BY ID', $field, $dbh->quote( $query );
-  my $sth = $dbh->prepare( $sql );
-  $sth->execute;
+  my $statement = sprintf 'SELECT id, vendor, model, serial, warranty FROM drives WHERE %s = ? ORDER BY id', $field;
+
+  my $sth = $dbh->prepare( $statement ) or die $dbh->errstr;
+
+  $sth->execute( $query ) or die $sth->errstr;
 
   &print_rows( $sth );
-
-  $sth->finish;
 }
 
 sub add {
-  my ( $dbh, $vendor, $model_number, $serial_number, $warranty_expires ) = @_;
+  my ( $dbh, $vendor, $model, $serial, $warranty ) = @_;
 
-  if ( not defined $vendor or not defined $model_number or not defined $serial_number ) {
-    say STDERR 'vendor, model_number and serial_number must be specified';
+  unless ( defined $vendor && defined $model && defined $serial ) {
+    say STDERR 'vendor, model and serial must be specified';
     return;
   }
 
-  my $sth = $dbh->prepare( 'INSERT INTO DRIVES ( VENDOR, MODEL_NUMBER, SERIAL_NUMBER, WARRANTY_EXPIRES ) VALUES ( ?, ?, ?, TO_DATE( ?, \'YYYY-MM-DD\' ) )' );
-  $sth->execute( $vendor, $model_number, $serial_number, $warranty_expires );
+  my $sth = $dbh->prepare( 'INSERT INTO drives ( vendor, model, serial, warranty ) VALUES ( ?, ?, ?, ? )' )
+    or die $dbh->errstr;
+
+  $sth->execute( $vendor, $model, $serial, $warranty ) or die $sth->errstr;
   $sth->finish;
 }
 
 sub delete {
   my ( $dbh, $id ) = @_;
 
-  if ( not defined $id ) {
+  unless ( defined $id ) {
     say STDERR 'id must be specified';
     return;
   }
 
-  my $sth = $dbh->prepare( 'DELETE FROM DRIVES WHERE ID = ?' );
-  $sth->execute( $id );
+  my $sth = $dbh->prepare( 'DELETE FROM drives WHERE id = ?' ) or die $dbh->errstr;
+
+  $sth->execute( $id ) or die $sth->errstr;
   $sth->finish;
 }
 
 sub update {
-  my ( $dbh, $old_id, $id, $vendor, $model_number, $serial_number, $warranty_expires ) = @_;
+  my ( $dbh, $old_id, $id, $vendor, $model, $serial, $warranty ) = @_;
 
-  if ( not defined $old_id or not defined $id or not defined $vendor or not defined $model_number or not defined $serial_number ) {
-    say STDERR 'old_id, id, vendor, model_number and serial_number must be specified';
+  unless ( defined $old_id && defined $id && defined $vendor && defined $model && defined $serial ) {
+    say STDERR 'old_id, id, vendor, model and serial must be specified';
     return;
   }
 
-  my $sth = $dbh->prepare( 'UPDATE DRIVES SET ID = ?, VENDOR = ?, MODEL_NUMBER = ?, SERIAL_NUMBER = ?, WARRANTY_EXPIRES = TO_DATE( ?, \'YYYY-MM-DD\' ) WHERE ID = ?' );
-  $sth->execute( $id, $vendor, $model_number, $serial_number, $warranty_expires, $old_id );
+  my $sth = $dbh->prepare( 'UPDATE drives SET id = ?, vendor = ?, model = ?, serial = ?, warranty = ? WHERE id = ?' )
+    or die $dbh->errstr;
+
+  $sth->execute( $id, $vendor, $model, $serial, $warranty, $old_id ) or die $sth->errstr;
   $sth->finish;
 }
 
@@ -104,17 +112,18 @@ my %dispatch_table = ( list   => \&list,
                        u      => \&update );
 
 my %opts;
-getopts( 'd:u:p:', \%opts );
-my $db       = $opts{d};
+getopts( 'h:d:u:p:', \%opts );
+my $host     = $opts{h};
 my $user     = $opts{u};
 my $password = $opts{p};
+my $database = $opts{d};
 
-if ( not defined $db or not defined $user or not defined $password ) {
-  say STDERR 'db(-d), user(-u) and password(-p) must be specified';
+unless ( defined $host && defined $user && defined $password && defined $database ) {
+  say STDERR 'host(-h), user(-u), password(-p) add database(-d) must be specified';
   exit -1;
 }
 
-my $dbh = DBI->connect( "dbi:Oracle:$db", $user, $password ) or die $!;
+my $dbh = DBI->connect( "dbi:mysql:host=$host;database=$database", $user, $password ) or die $DBI::errstr;
 
 my $command = ( @ARGV < 1 ) ? 'list' : shift;
 if ( exists $dispatch_table{$command} ) {
