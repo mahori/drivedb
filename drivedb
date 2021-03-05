@@ -128,6 +128,9 @@ my $dbh = DBI->connect( "dbi:mysql:host=$host;database=$database", $user, $passw
 my $command = ( @ARGV < 1 ) ? 'list' : shift;
 if ( exists $dispatch_table{$command} ) {
   $dispatch_table{$command}->( $dbh, @ARGV );
+} else {
+  unshift @ARGV, $command;
+  $dispatch_table{search}( $dbh, @ARGV );
 }
 
 $dbh->disconnect;
